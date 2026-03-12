@@ -1,7 +1,7 @@
 /*
   SYLLABIQ — SCRIPT.JS
-  Input:  PDF upload only
-  Output: skills, projects, certifications, career paths
+  Input:  PDF upload OR typed topics
+  Output: skills, projects, certifications (with links), career paths
 */
 
 const API_URL = 'https://syllabiq-backend-production-d03a.up.railway.app/map';
@@ -14,6 +14,8 @@ const dropIdle = document.getElementById('dropIdle');
 const dropSuccess = document.getElementById('dropSuccess');
 const fileName = document.getElementById('fileName');
 const changeFile = document.getElementById('changeFile');
+const topicsTextarea = document.getElementById('topicsTextarea');
+const topicsCount = document.getElementById('topicsCount');
 const mapBtn = document.getElementById('mapBtn');
 const btnText = document.getElementById('btnText');
 const btnSpinner = document.getElementById('btnSpinner');
@@ -26,7 +28,17 @@ const toastMsg = document.getElementById('toastMsg');
 const resetBtn = document.getElementById('resetBtn');
 
 let selectedFile = null;
+let activeTab = 'pdf'; // 'pdf' | 'text'
 let timers = [];
+
+// ---- TAB SWITCH ----
+window.switchTab = function (tab) {
+  activeTab = tab;
+  document.getElementById('pdfPanel').classList.toggle('hidden', tab !== 'pdf');
+  document.getElementById('textPanel').classList.toggle('hidden', tab !== 'text');
+  document.getElementById('tabPdf').classList.toggle('active', tab === 'pdf');
+  document.getElementById('tabText').classList.toggle('active', tab === 'text');
+};
 
 // ---- DRAG & DROP ----
 dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
@@ -54,14 +66,29 @@ function handleFile(file) {
   dropSuccess.classList.remove('hidden');
 }
 
+// ---- TOPICS CHAR COUNT ----
+topicsTextarea.addEventListener('input', () => {
+  const len = topicsTextarea.value.length;
+  topicsCount.textContent = len.toLocaleString() + ' characters';
+});
+
 // ---- MAP CLICK ----
 mapBtn.addEventListener('click', async () => {
-  if (!selectedFile) { showToast('Please upload your syllabus PDF first.'); return; }
+  const topics = topicsTextarea.value.trim();
+
+  if (activeTab === 'pdf' && !selectedFile) {
+    showToast('Please upload your syllabus PDF first.'); return;
+  }
+  if (activeTab === 'text' && topics.length < 30) {
+    showToast('Please type at least a few syllabus topics.'); return;
+  }
 
   startLoading();
 
   const form = new FormData();
-  form.append('syllabus', selectedFile);
+  if (activeTab === 'pdf' && selectedFile) form.append('syllabus', selectedFile);
+  if (activeTab === 'text' && topics) form.append('topics', topics);
+
   const cn = document.getElementById('courseName').value.trim();
   const cs = document.getElementById('courseStream').value;
   const cg = document.getElementById('careerGoal').value.trim();
@@ -110,6 +137,7 @@ function stopLoading() {
 resetBtn.addEventListener('click', () => {
   resultsSection.classList.add('hidden');
   selectedFile = null; syllabusInput.value = '';
+  topicsTextarea.value = ''; topicsCount.textContent = '0 characters';
   document.getElementById('courseName').value = '';
   document.getElementById('courseStream').value = '';
   document.getElementById('careerGoal').value = '';
@@ -123,7 +151,6 @@ function renderResults(data) {
   renderProjects(data.project_ideas || []);
   renderCerts(data.certifications || []);
   renderCareers(data.career_paths || []);
-  renderResources(data.learning_resources || []);
   renderSummary(data.overall_summary || '');
   resultsSection.classList.remove('hidden');
   resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -155,17 +182,27 @@ function renderProjects(projects) {
 function renderCerts(certs) {
   const el = document.getElementById('certsList');
   if (!certs.length) { el.innerHTML = empty('No certifications found.'); return; }
-  const icons = { 'Google': '🔵', 'AWS': '🟠', 'Microsoft': '🟦', 'Meta': '🔷', 'Oracle': '🔴', 'Cisco': '🌐', 'IBM': '🔷', 'Coursera': '🎓', 'Udemy': '🟣' };
+  const icons = {
+    'Google': '🔵', 'AWS': '🟠', 'Microsoft': '🟦', 'Meta': '🔷',
+    'Oracle': '🔴', 'Cisco': '🌐', 'IBM': '🔷', 'Coursera': '🎓', 'Udemy': '🟣'
+  };
   el.innerHTML = certs.map(c => {
     const k = Object.keys(icons).find(k => (c.provider || '').includes(k));
+    const hasLink = c.url && c.url.startsWith('http');
     return `
-    <div class="cert-card">
+    <div class="cert-card ${hasLink ? 'cert-clickable' : ''}" ${hasLink ? `onclick="window.open('${x(c.url)}','_blank')"` : ''}>
       <div class="cert-icon">${k ? icons[k] : '📜'}</div>
-      <div>
+      <div class="cert-content">
         <div class="cert-name">${x(c.name)}</div>
         <div class="cert-provider">${x(c.provider)}</div>
         <div class="cert-desc">${x(c.description)}</div>
-        <span class="cert-rel">${x(c.relevance || 'Relevant')}</span>
+        <div class="cert-footer">
+          <span class="cert-rel">${x(c.relevance || 'Relevant')}</span>
+          ${hasLink ? `<span class="cert-link-badge">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><polyline points="15,3 21,3 21,9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="10" y1="14" x2="21" y2="3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            Open Course
+          </span>` : ''}
+        </div>
       </div>
     </div>`;
   }).join('');
@@ -189,56 +226,6 @@ function renderCareers(careers) {
 function renderSummary(text) {
   document.getElementById('summaryBody').innerHTML = `<p>${x(text)}</p>`;
 }
-
-// ---- LEARNING RESOURCES ----
-function renderResources(resources) {
-  const el = document.getElementById('resourcesGrid');
-  if (!resources.length) { el.innerHTML = empty('No resources found.'); return; }
-
-  const platformClass = (p) => {
-    p = (p || '').toLowerCase();
-    if (p.includes('youtube')) return 'youtube';
-    if (p.includes('coursera')) return 'coursera';
-    if (p.includes('udemy')) return 'udemy';
-    if (p.includes('freecodecamp')) return 'freecodecamp';
-    return 'default';
-  };
-
-  const typeClass = (t) => {
-    t = (t || '').toLowerCase();
-    if (t.includes('free with')) return 'freecert';
-    if (t.includes('free')) return 'free';
-    return 'paid';
-  };
-
-  const searchURL = (hint) =>
-    'https://www.google.com/search?q=' + encodeURIComponent(hint || '');
-
-  el.innerHTML = resources.map(r => `
-    <div class="resource-card">
-      <div class="resource-top">
-        <span class="resource-platform ${platformClass(r.platform)}">${x(r.platform)}</span>
-        <span class="resource-type ${typeClass(r.type)}">${x(r.type || 'Free')}</span>
-      </div>
-      <div class="resource-title">${x(r.title)}</div>
-      <div class="resource-skill">For: ${x(r.skill)}</div>
-      <div class="resource-why">${x(r.why)}</div>
-      ${r.url_hint ? `<a class="resource-search" href="${searchURL(r.url_hint)}" target="_blank" rel="noopener">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/><path d="m21 21-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-        Find this resource
-      </a>` : ''}
-    </div>`).join('');
-}
-
-// ---- PDF DOWNLOAD ----
-document.getElementById('downloadBtn').addEventListener('click', () => {
-  // Temporarily force all rcard opacities to 1 for print
-  document.querySelectorAll('.rcard').forEach(c => {
-    c.style.opacity = '1';
-    c.style.transform = 'none';
-  });
-  window.print();
-});
 
 // ---- HELPERS ----
 function empty(msg) { return `<p style="color:var(--text-dim);font-size:0.83rem">${msg}</p>`; }
