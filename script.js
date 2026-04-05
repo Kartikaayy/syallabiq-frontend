@@ -4,7 +4,7 @@
   Output: skills, projects, certifications (with links), career paths
 */
 
-const API_URL = 'https://syallabiq-production.up.railway.app';
+const API_URL = 'https://syallabiq-production.up.railway.app/map';
 
 // ---- REFS ----
 const dropZone = document.getElementById('dropZone');
