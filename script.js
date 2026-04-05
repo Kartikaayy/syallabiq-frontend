@@ -4,7 +4,7 @@
   Output: skills, projects, certifications (with links), career paths
 */
 
-const API_URL = 'https://ee596450-7c45-4a08-ba81-b4bd4e3a9c84-dev.e1-us-east-azure.choreoapis.dev/syallabiq/syallabiq/v1.0';
+const API_URL = 'https://syallabiq-production.up.railway.app';
 
 // ---- REFS ----
 const dropZone = document.getElementById('dropZone');
